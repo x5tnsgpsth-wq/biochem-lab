@@ -3,404 +3,532 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BioChem Pro Lab | تطبيق المختبر المتكامل</title>
+    <title>BioChem Professional Simulator</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap');
         
         body {
             font-family: 'IBM Plex Sans Arabic', sans-serif;
             background-color: #0f172a;
-            color: #f1f5f9;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
+            color: #f8fafc;
+            user-select: none;
         }
 
-        .glass {
-            background: rgba(30, 41, 59, 0.75);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .lab-bench {
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            background-size: cover;
         }
 
         /* Test Tube Styling */
-        .test-tube {
-            width: 75px;
-            height: 250px;
-            background: linear-gradient(to right, rgba(255,255,255,0.05), rgba(255,255,255,0.2), rgba(255,255,255,0.05));
-            border: 2px solid rgba(255,255,255,0.2);
+        .tube-holder {
+            width: 120px;
+            height: 350px;
+            position: relative;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+        }
+
+        .glass-tube {
+            width: 80px;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
             border-bottom-left-radius: 40px;
             border-bottom-right-radius: 40px;
             position: relative;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            margin: 0 auto;
             overflow: hidden;
+            z-index: 10;
+        }
+
+        .glass-tube::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 15%;
+            width: 15%; height: 100%;
+            background: linear-gradient(to right, rgba(255,255,255,0.15), transparent);
         }
 
         .liquid-layer {
             position: absolute;
             bottom: 0;
             width: 100%;
-            height: 0%;
-            transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 2s ease-in-out;
         }
 
-        /* Animations */
-        @keyframes steam-rise {
-            0% { transform: translateY(0) scale(1); opacity: 0.5; }
-            100% { transform: translateY(-60px) scale(2.5); opacity: 0; }
+        /* Specific Test Effects */
+        .molisch-ring {
+            position: absolute;
+            bottom: 40%;
+            width: 100%;
+            height: 10px;
+            background: rgba(147, 51, 234, 0.8);
+            filter: blur(4px);
+            opacity: 0;
+            transition: opacity 2s;
+            z-index: 35;
         }
 
-        .steam-particle {
-            width: 4px;
-            height: 12px;
+        .bubbles {
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            display: none;
+        }
+
+        @keyframes rise {
+            0% { transform: translateY(0); opacity: 0.8; }
+            100% { transform: translateY(-200px); opacity: 0; }
+        }
+
+        .bubble {
+            position: absolute;
             background: rgba(255,255,255,0.4);
-            filter: blur(3px);
             border-radius: 50%;
-            animation: steam-rise 2s infinite;
+            animation: rise 1.5s infinite;
         }
 
-        .micro-lens {
-            width: 130px;
-            height: 130px;
-            border-radius: 50%;
-            border: 5px solid #334155;
-            background: radial-gradient(circle, #1e293b, #020617);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        .burner-active .flame {
+            display: block;
         }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .flame {
+            display: none;
+            width: 30px;
+            height: 60px;
+            background: radial-gradient(circle at bottom, #60a5fa, #2563eb, transparent);
+            border-radius: 50% 50% 20% 20%;
+            filter: blur(5px);
+            animation: flicker 0.1s infinite alternate;
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        @keyframes flicker {
+            0% { transform: translateX(-50%) scale(1); }
+            100% { transform: translateX(-50%) scale(1.1); opacity: 0.8; }
+        }
+
+        /* Tooltip-like Info */
+        .info-card {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
     </style>
 </head>
-<body class="flex flex-col">
+<body class="h-screen flex flex-col overflow-hidden">
 
-    <!-- Header / Navigation -->
-    <header class="h-16 glass flex items-center justify-between px-6 z-50 border-b border-white/5">
+    <!-- Top Bar -->
+    <nav class="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-8 shrink-0 shadow-2xl z-50">
         <div class="flex items-center gap-4">
-            <div class="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-emerald-500/20">🧪</div>
+            <div class="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-900/20">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.642.257a4 4 0 01-1.536.303H10a2 2 0 01-2-2V8a2 2 0 012-2h.341a4 4 0 011.536.303l.642.257a6 6 0 003.86.517l2.387-.477a2 2 0 001.022-.547l.54-.54a2 2 0 012.829 0l1.414 1.414a2 2 0 010 2.829l-.54.54z"></path></svg>
+            </div>
             <div>
-                <h1 class="font-bold text-lg tracking-tight">BioChem <span class="text-emerald-400">Pro</span></h1>
-                <p class="text-[10px] text-slate-400 font-medium">نظام المختبر الافتراضي للأكاديميين</p>
+                <h1 class="text-sm font-bold text-slate-100">Virtual BioChem Lab</h1>
+                <p class="text-[10px] text-emerald-500 font-mono tracking-tighter uppercase">Professional Simulator v2.1</p>
             </div>
         </div>
-
-        <div class="flex items-center gap-8">
-            <div class="hidden md:flex flex-col items-end">
-                <span class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">مستوى الإتقان (XP)</span>
-                <div class="w-40 h-2 bg-slate-800 rounded-full mt-1 overflow-hidden border border-white/5">
-                    <div id="xp-bar" class="w-0 h-full bg-emerald-500 transition-all duration-700 shadow-[0_0_10px_#10b981]"></div>
-                </div>
+        
+        <div class="flex items-center gap-6">
+            <div id="status-display" class="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-full border border-slate-700">
+                <div class="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></div>
+                <span class="text-[10px] text-slate-400 font-medium">نظام المراقبة: جاهز</span>
             </div>
-            <button onclick="location.reload()" class="p-2 hover:bg-white/5 rounded-lg transition" title="إعادة تعيين">
-                🔄
-            </button>
+            <button onclick="resetLab()" class="text-[11px] font-semibold text-slate-400 hover:text-white transition-colors">إعادة تهيئة المعمل</button>
         </div>
-    </header>
+    </nav>
 
     <div class="flex-1 flex overflow-hidden">
         
-        <!-- Right Sidebar (Samples & Reagents) -->
-        <aside class="w-80 glass border-l border-white/5 p-6 flex flex-col gap-6 overflow-y-auto">
+        <!-- Inventory Sidebar -->
+        <aside class="w-80 bg-slate-900/50 border-l border-slate-800 p-6 flex flex-col gap-8 custom-scroll overflow-y-auto">
+            
             <section>
-                <h3 class="text-[11px] font-bold text-emerald-400 mb-4 tracking-widest uppercase flex items-center gap-2">
-                    <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span> العينات المخبرية
-                </h3>
-                <div id="sample-list" class="space-y-2"></div>
+                <header class="flex items-center gap-2 mb-4">
+                    <span class="w-1 h-4 bg-emerald-500 rounded-full"></span>
+                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">العينات الكربوهيدراتية</h2>
+                </header>
+                <div id="samples-grid" class="grid gap-2">
+                    <!-- Dynamic Content -->
+                </div>
             </section>
 
             <section>
-                <h3 class="text-[11px] font-bold text-blue-400 mb-4 tracking-widest uppercase flex items-center gap-2">
-                    <span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span> الكواشف الكيميائية
-                </h3>
-                <div id="test-list" class="space-y-2"></div>
+                <header class="flex items-center gap-2 mb-4">
+                    <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
+                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">الكواشف الكيميائية</h2>
+                </header>
+                <div id="reagents-grid" class="grid gap-2">
+                    <!-- Dynamic Content -->
+                </div>
             </section>
 
-            <div class="mt-auto pt-4 border-t border-white/5">
-                <button onclick="toggleHeat()" id="heat-btn" class="w-full py-3 bg-slate-800 rounded-xl text-xs font-bold transition-all border border-slate-700 hover:border-orange-500 flex items-center justify-center gap-2">
-                    <span>🔥</span> تشغيل الحمام المائي
-                </button>
-            </div>
+            <section>
+                <header class="flex items-center gap-2 mb-4">
+                    <span class="w-1 h-4 bg-red-500 rounded-full"></span>
+                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">المعالجات الفيزيائية</h2>
+                </header>
+                <div class="space-y-2">
+                    <button onclick="applyHeat()" class="w-full py-3 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 rounded-xl transition-all flex items-center justify-between px-4 group">
+                        <span class="text-xs font-semibold text-red-400">تسخين (Water Bath)</span>
+                        <span class="text-lg group-hover:animate-bounce">🔥</span>
+                    </button>
+                    <button id="hydrolysis-btn" onclick="startHydrolysis()" class="w-full py-3 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 rounded-xl transition-all flex items-center justify-between px-4 group disabled:opacity-30">
+                        <span class="text-xs font-semibold text-blue-400">تحلل مائي (H₂O/H⁺)</span>
+                        <span class="text-lg">🧪</span>
+                    </button>
+                </div>
+            </section>
+
         </aside>
 
         <!-- Main Workspace -->
-        <main class="flex-1 relative flex flex-col items-center justify-center p-4">
+        <main class="flex-1 lab-bench relative flex flex-col items-center justify-center p-12">
             
-            <!-- Steam Effect -->
-            <div id="steam-container" class="absolute top-[20%] flex gap-4 opacity-0 transition-opacity duration-500">
-                <div class="steam-particle" style="animation-delay: 0s"></div>
-                <div class="steam-particle" style="animation-delay: 0.4s"></div>
-                <div class="steam-particle" style="animation-delay: 0.8s"></div>
+            <!-- Real-time Instruction -->
+            <div class="absolute top-10 left-1/2 -translate-x-1/2 w-[500px] text-center">
+                <div id="instruction-box" class="bg-black/40 backdrop-blur-md border border-white/5 p-4 rounded-2xl shadow-2xl transition-all">
+                    <p id="instruction-text" class="text-sm text-slate-300">مرحباً بك في المختبر. ابدأ باختيار عينة لوضعها في أنبوب الاختبار.</p>
+                </div>
             </div>
 
-            <div class="flex gap-16 items-end">
-                <!-- Tube Section -->
-                <div class="flex flex-col items-center gap-6">
-                    <div id="tube-tag" class="px-4 py-1 bg-slate-900/80 rounded-full border border-white/10 text-[10px] font-mono text-emerald-400 shadow-xl opacity-0 transition-opacity">
-                        SAMPLE_READY
+            <!-- The Bench -->
+            <div class="relative flex flex-col items-center">
+                <!-- Tube Holder -->
+                <div class="tube-holder flex flex-col items-center">
+                    <div id="tube" class="glass-tube">
+                        <!-- Liquid Layers -->
+                        <div id="layer-sample" class="liquid-layer bg-slate-400/20 h-0 z-10"></div>
+                        <div id="layer-reagent" class="liquid-layer bg-transparent h-0 z-20"></div>
+                        <div id="layer-reaction" class="liquid-layer bg-transparent h-0 z-30"></div>
+                        <div id="molisch-ring" class="molisch-ring"></div>
+                        
+                        <!-- Bubbles -->
+                        <div id="bubble-container" class="bubbles"></div>
                     </div>
-                    <div class="test-tube" id="main-tube">
-                        <div id="liquid-reagent" class="liquid-layer z-10"></div>
-                        <div id="liquid-base" class="liquid-layer bg-slate-100/10"></div>
-                        <div id="ring-layer" class="absolute top-[42%] w-full h-4 blur-[2px] opacity-0 transition-all duration-[2s]"></div>
-                    </div>
+                    
+                    <!-- Label -->
+                    <div id="tube-label" class="mt-6 px-4 py-1 bg-slate-800 border border-slate-700 rounded text-[10px] font-mono text-slate-400 opacity-0 transition-opacity uppercase tracking-tighter">EMPTY</div>
                 </div>
 
-                <!-- Microscope Section -->
-                <div class="hidden lg:flex flex-col items-center gap-4">
-                    <div class="glass p-5 rounded-3xl border-emerald-500/10 shadow-2xl">
-                        <p class="text-[10px] font-bold text-slate-500 mb-3 uppercase text-center tracking-tighter">الفحص المجهري</p>
-                        <div class="micro-lens" id="micro-view">
-                            <span class="text-4xl filter grayscale opacity-20">🔬</span>
+                <!-- Burner Device -->
+                <div id="burner-device" class="mt-8 relative">
+                    <div class="flame"></div>
+                    <div class="w-20 h-10 bg-gradient-to-b from-slate-700 to-slate-900 rounded-t-xl border-t border-slate-600"></div>
+                </div>
+            </div>
+
+            <!-- Result Panel (Floating) -->
+            <div id="result-panel" class="absolute bottom-10 right-10 w-96 info-card rounded-3xl p-6 transform translate-y-full opacity-0 transition-all duration-700 overflow-hidden">
+                <div class="relative z-10">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">تحليل العينة النهائي</h3>
+                        <span id="res-badge" class="px-2 py-0.5 rounded text-[9px] font-bold"></span>
+                    </div>
+                    <h2 id="res-title" class="text-xl font-bold text-white mb-2"></h2>
+                    <p id="res-desc" class="text-xs text-slate-400 leading-relaxed mb-4"></p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="p-3 bg-white/5 rounded-2xl border border-white/5">
+                            <span class="block text-[8px] text-slate-500 uppercase mb-1">التركيب الكيميائي</span>
+                            <span id="res-struct" class="text-[10px] text-blue-400 font-mono"></span>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded-2xl border border-white/5">
+                            <span class="block text-[8px] text-slate-500 uppercase mb-1">الملاحظة المخبرية</span>
+                            <span id="res-obs" class="text-[10px] text-emerald-400 font-medium"></span>
                         </div>
                     </div>
                 </div>
+                <!-- Background Decoration -->
+                <div class="absolute top-0 right-0 -m-4 w-24 h-24 bg-blue-600/10 rounded-full blur-3xl"></div>
             </div>
 
-            <!-- Reaction Status Card -->
-            <div id="status-card" class="absolute bottom-8 w-full max-w-2xl px-6 opacity-0 translate-y-8 transition-all duration-500">
-                <div class="glass rounded-2xl p-6 border-r-4 border-emerald-500 shadow-2xl">
-                    <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <h2 id="st-title" class="text-xl font-bold">اسم التفاعل</h2>
-                            <p id="st-result" class="text-sm font-bold mt-1">بانتظار النتيجة...</p>
-                        </div>
-                        <div class="text-[10px] bg-white/5 px-2 py-1 rounded border border-white/10 font-mono text-slate-400">REALTIME_ANALYSIS</div>
-                    </div>
-                    <p id="st-desc" class="text-xs text-slate-400 leading-relaxed mb-4"></p>
-                    <div class="p-3 bg-black/30 rounded-xl font-mono text-[11px] text-blue-300 border border-white/5 overflow-x-auto" id="st-formula">
-                        $Equation_Loading...$
-                    </div>
-                </div>
-            </div>
         </main>
 
-        <!-- Left Sidebar (Stats & History) -->
-        <aside class="w-80 glass border-r border-white/5 p-6 flex flex-col gap-6">
-            <div>
-                <h3 class="text-[11px] font-bold text-slate-500 mb-4 tracking-widest uppercase">مخطط التفاعل</h3>
-                <div class="h-44">
-                    <canvas id="radarChart"></canvas>
-                </div>
+        <!-- Academic Log Sidebar -->
+        <aside class="w-80 bg-slate-900/50 border-r border-slate-800 p-6 flex flex-col shadow-inner">
+            <header class="flex items-center justify-between mb-6">
+                <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">السجل العلمي</h2>
+                <span class="text-[9px] bg-slate-800 px-2 py-1 rounded text-slate-500 font-mono" id="log-count">00/00</span>
+            </header>
+            
+            <div id="lab-log" class="flex-1 space-y-4 overflow-y-auto pr-2 custom-scroll text-[11px]">
+                <!-- Log entries -->
             </div>
 
-            <div class="flex-1 flex flex-col min-h-0">
-                <h3 class="text-[11px] font-bold text-slate-500 mb-4 tracking-widest uppercase">سجل التقارير</h3>
-                <div id="log-container" class="flex-1 overflow-y-auto space-y-2 pr-2">
-                    <p class="text-[10px] text-slate-600 italic">لا توجد سجلات حالية...</p>
+            <div class="mt-6 pt-6 border-t border-slate-800">
+                <div class="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                    <p class="text-[10px] text-emerald-400 font-medium leading-relaxed">
+                        <span class="font-bold">نصيحة المختبر:</span>
+                        تأكد دائماً من إضافة الكاشف قبل البدء بالتسخين للحصول على نتائج دقيقة في اختبارات الاختزال.
+                    </p>
                 </div>
             </div>
         </aside>
-
     </div>
 
-    <!-- Notification -->
-    <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 glass border-emerald-500/50 text-emerald-400 px-8 py-3 rounded-full text-sm font-bold opacity-0 transition-all pointer-events-none z-[100] shadow-2xl"></div>
-
     <script>
-        // --- البيانات الأساسية المستخلصة من التقرير ---
-        const DB = {
+        // Full Data from the provided manual
+        const DATA = {
             samples: [
-                { id: 'glu', name: 'جلوكوز', type: 'أحادي (Aldose)', formula: 'C₆H₁₂O₆', xp: 15 },
-                { id: 'fru', name: 'فركتوز', type: 'أحادي (Ketose)', formula: 'C₆H₁₂O₆', xp: 15 },
-                { id: 'suc', name: 'سكروز', type: 'ثنائي (Non-red)', formula: 'C₁₂H₂₂O₁₁', xp: 20 },
-                { id: 'xyl', name: 'زايلوز', type: 'خماسي (Pentose)', formula: 'C₅H₁₀O₅', xp: 15 },
-                { id: 'sta', name: 'النشأ', type: 'متعدد (Poly)', formula: '(C₆H₁₀O₅)ₙ', xp: 25 }
+                { id: 'glu', name: 'جلوكوز', type: 'سكر أحادي (ألدوز)', formula: 'C₆H₁₂O₆', info: 'سكر مختزل يعطي نتيجة إيجابية سريعة.' },
+                { id: 'fru', name: 'فركتوز', type: 'سكر أحادي (كيتوز)', formula: 'C₆H₁₂O₆', info: 'سكر كيتوني يتفاعل بسرعة مع كاشف سليوانوف.' },
+                { id: 'xyl', name: 'زايلوز', type: 'سكر خماسي (بنتوز)', formula: 'C₅H₁₀O₅', info: 'سكر خماسي يعطي لوناً مميزاً مع كاشف بيال.' },
+                { id: 'suc', name: 'سكروز', type: 'سكر ثنائي', formula: 'C₁₂H₂₂O₁₁', info: 'سكر غير مختزل يتطلب تحللاً مائياً ليعطي نتائج إيجابية.' },
+                { id: 'mal', name: 'مالتوز', type: 'سكر ثنائي مختزل', formula: 'C₁₂H₂₂O₁₁', info: 'يتكون من وحدتي جلوكوز، مختزل ببطء في اختبار بارفويد.' },
+                { id: 'sta', name: 'نشأ', type: 'سكر متعدد', formula: '(C₆H₁₀O₅)n', info: 'بوليمر معقد، يتفاعل حصرياً مع اليود.' }
             ],
-            tests: [
-                { id: 'mol', name: 'فحص موليش', info: 'كاشف عام للكربوهيدرات', heat: false },
-                { id: 'ben', name: 'فحص بندكت', info: 'للكشف عن السكر المختزل', heat: true },
-                { id: 'sel', name: 'فحص سليوانوف', info: 'للتمييز بين الألدوز والكيتوز', heat: true },
-                { id: 'bia', name: 'فحص بيال', info: 'للكشف عن البنتوزات', heat: true },
-                { id: 'iod', name: 'فحص اليود', info: 'للكشف عن النشأ', heat: false }
+            reagents: [
+                { id: 'mol', name: 'كاشف مولش', color: '#a855f7', needsHeat: false, desc: 'كاشف عام لكل الكربوهيدرات.' },
+                { id: 'ben', name: 'كاشف بندكت', color: '#3b82f6', needsHeat: true, desc: 'للكشف عن السكريات المختزلة.' },
+                { id: 'bar', name: 'كاشف بارفويد', color: '#60a5fa', needsHeat: true, desc: 'للتمييز بين السكر الأحادي والثنائي.' },
+                { id: 'sel', name: 'كاشف سليوانوف', color: '#fbbf24', needsHeat: true, desc: 'للتمييز بين الألدوز والكيتوز.' },
+                { id: 'bia', name: 'كاشف بيال', color: '#f59e0b', needsHeat: true, desc: 'للكشف عن السكريات الخماسية.' },
+                { id: 'iod', name: 'محلول اليود', color: '#78350f', needsHeat: false, desc: 'للكشف عن النشأ.' }
             ]
         };
 
-        let activeSample = null;
-        let isHeated = false;
-        let totalXP = 0;
-        let radar;
-
-        // --- تهيئة الواجهة ---
-        window.onload = () => {
-            const sDiv = document.getElementById('sample-list');
-            sDiv.innerHTML = DB.samples.map(s => `
-                <button onclick="pickS('${s.id}')" id="s-${s.id}" class="w-full text-right p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-emerald-500/10 transition-all group">
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm font-bold group-hover:text-emerald-400">${s.name}</span>
-                        <span class="text-[9px] font-mono text-slate-500">${s.formula}</span>
-                    </div>
-                    <div class="text-[9px] text-slate-500 mt-1">${s.type}</div>
-                </button>
-            `).join('');
-
-            const tDiv = document.getElementById('test-list');
-            tDiv.innerHTML = DB.tests.map(t => `
-                <button onclick="runT('${t.id}')" id="t-${t.id}" class="w-full text-right p-3 rounded-xl border border-white/5 bg-white/5 hover:bg-blue-500/10 transition-all text-xs font-bold flex justify-between">
-                    ${t.name}
-                    ${t.heat ? '<span class="text-[10px]">🔥</span>' : ''}
-                </button>
-            `).join('');
-
-            initRadar();
-            notify("مرحباً بك في المختبر. ابدأ باختيار عينة.");
+        let state = {
+            sample: null,
+            reagent: null,
+            isHeating: false,
+            heatTime: 0,
+            isHydrolyzed: false,
+            logs: []
         };
 
-        // --- المنطق التفاعلي ---
-        function pickS(id) {
-            activeSample = DB.samples.find(s => s.id === id);
-            highlight('s-', id, 'emerald');
-            resetLabUI();
-            document.getElementById('tube-tag').innerText = activeSample.id.toUpperCase();
-            document.getElementById('tube-tag').style.opacity = '1';
-            document.getElementById('liquid-base').style.height = '35%';
-            notify(`تم سحب عينة ${activeSample.name}`);
+        // Initialize Inventory
+        function initInventory() {
+            const sGrid = document.getElementById('samples-grid');
+            const rGrid = document.getElementById('reagents-grid');
+
+            sGrid.innerHTML = DATA.samples.map(s => `
+                <button onclick="pickSample('${s.id}')" class="text-right p-3 bg-white/5 border border-white/5 rounded-xl hover:border-emerald-500/40 transition group">
+                    <div class="text-[11px] font-bold group-hover:text-emerald-400 transition-colors">${s.name}</div>
+                    <div class="text-[9px] text-slate-500">${s.type}</div>
+                </button>
+            `).join('');
+
+            rGrid.innerHTML = DATA.reagents.map(r => `
+                <button onclick="addReagent('${r.id}')" class="text-right p-3 bg-white/5 border border-white/5 rounded-xl hover:border-blue-500/40 transition group">
+                    <div class="text-[11px] font-bold group-hover:text-blue-400 transition-colors">${r.name}</div>
+                    <div class="text-[9px] text-slate-500">${r.needsHeat ? 'يتطلب تسخين' : 'تفاعل فوري'}</div>
+                </button>
+            `).join('');
         }
 
-        function toggleHeat() {
-            isHeated = !isHeated;
-            const btn = document.getElementById('heat-btn');
-            const steam = document.getElementById('steam-container');
-            btn.classList.toggle('bg-orange-600', isHeated);
-            btn.classList.toggle('border-orange-400', isHeated);
-            steam.style.opacity = isHeated ? '1' : '0';
+        function pickSample(id) {
+            resetLab();
+            state.sample = DATA.samples.find(s => s.id === id);
+            
+            // Visuals
+            document.getElementById('layer-sample').style.height = '30%';
+            const label = document.getElementById('tube-label');
+            label.innerText = state.sample.name;
+            label.style.opacity = '1';
+            
+            updateInstruction(`تم وضع عينة ${state.sample.name} في الأنبوب. اختر كاشفاً الآن.`);
+            addToLog(`تم تجهيز عينة من ${state.sample.name}.`, 'info');
         }
 
-        function runT(tid) {
-            if(!activeSample) return notify("⚠️ يرجى اختيار العينة أولاً", "text-orange-400");
-            const test = DB.tests.find(t => t.id === tid);
+        function addReagent(id) {
+            if(!state.sample) return updateInstruction("اختر عينة أولاً!");
+            
+            state.reagent = DATA.reagents.find(r => r.id === id);
+            const rLayer = document.getElementById('layer-reagent');
+            rLayer.style.height = '60%';
+            rLayer.style.backgroundColor = state.reagent.color;
+            
+            addToLog(`إضافة ${state.reagent.name} للأنبوب.`, 'chem');
 
-            if(test.heat && !isHeated) return notify("🌡️ هذا التفاعل يتطلب تسخيناً!", "text-orange-400");
-
-            const reagent = document.getElementById('liquid-reagent');
-            reagent.style.height = '65%';
-            reagent.style.backgroundColor = 'rgba(255,255,255,0.15)';
-
-            setTimeout(() => {
-                const result = getReaction(activeSample.id, tid);
-                showResult(test.name, result);
-            }, 1200);
+            if(state.reagent.id === 'mol') {
+                // Special visual for Molisch (adding H2SO4)
+                updateInstruction("جاري إضافة حمض الكبريتيك المركز بحذر على الجدار الداخلي...");
+                setTimeout(() => {
+                    document.getElementById('molisch-ring').style.opacity = '1';
+                    checkReaction();
+                }, 2000);
+            } else if(!state.reagent.needsHeat) {
+                checkReaction();
+            } else {
+                updateInstruction(`كاشف ${state.reagent.name} يتطلب تسخيناً في حمام مائي.`);
+            }
         }
 
-        function getReaction(sid, tid) {
-            const map = {
-                'mol': { 
-                    pos: true, color: '#fef3c733', ring: '#7e22ce', 
-                    desc: 'كاشف موليش (ألفا نافثول) يتفاعل مع الكربوهيدرات المنزوعة الماء لتكوين حلقة بنفسجية.',
-                    formula: 'Carb + H₂SO₄ → Furfural + α-naphthol → Violet Ring',
-                    micro: '✨', stats: [90, 80, 100]
-                },
-                'ben': {
-                    pos: ['glu', 'fru', 'xyl'].includes(sid),
-                    color: ['glu', 'fru', 'xyl'].includes(sid) ? '#ea580c' : '#3b82f6',
-                    desc: ['glu', 'fru', 'xyl'].includes(sid) ? 'اختزال أيونات النحاسيك إلى أكسيد النحاسوز الأحمر.' : 'السكروز سكر غير مختزل لأن مجموعته الفعالة مرتبطة.',
-                    formula: 'R-CHO + 2Cu⁺⁺ + 5OH⁻ → R-COO⁻ + Cu₂O↓ + 3H₂O',
-                    micro: ['glu', 'fru', 'xyl'].includes(sid) ? '🔻' : '💧',
-                    stats: ['glu', 'fru', 'xyl'].includes(sid) ? [100, 90, 80] : [10, 5, 20]
-                },
-                'sel': {
-                    pos: ['fru', 'suc'].includes(sid),
-                    color: ['fru', 'suc'].includes(sid) ? '#991b1b' : '#fecaca33',
-                    desc: 'الكيتوزات تتحول لهيدروكسي ميثيل فرفورال الذي يتكثف مع الريسورسينول ليعطي لوناً أحمر.',
-                    formula: 'Ketose + HCl → HMF + Resorcinol → Cherry Red',
-                    micro: '🔴', stats: ['fru', 'suc'].includes(sid) ? [85, 95, 70] : [20, 10, 40]
-                },
-                'bia': {
-                    pos: sid === 'xyl',
-                    color: sid === 'xyl' ? '#065f46' : '#78350f',
-                    desc: 'البنتوزات تعطي فرفورال يتحد مع الأورسينول في وجود الحديد ليعطي لوناً أخضر.',
-                    formula: 'Pentose + HCl → Furfural + Orcinol + FeCl₃ → Green',
-                    micro: '🟢', stats: sid === 'xyl' ? [95, 70, 85] : [30, 10, 20]
-                },
-                'iod': {
-                    pos: sid === 'sta',
-                    color: sid === 'sta' ? '#1e3a8a' : '#fbbf24',
-                    desc: 'يدخل اليود داخل السلاسل الحلزونية للنشأ مكوناً معقداً أزرق داكناً.',
-                    formula: 'Starch (Amylose) + I₂ → [Starch-I₂] Complex',
-                    micro: '🔵', stats: sid === 'sta' ? [100, 20, 100] : [10, 0, 10]
+        function applyHeat() {
+            if(!state.reagent) return updateInstruction("أضف الكاشف قبل التسخين.");
+            if(state.isHeating) return;
+
+            state.isHeating = true;
+            document.getElementById('burner-device').classList.add('burner-active');
+            document.getElementById('bubble-container').style.display = 'block';
+            createBubbles();
+            
+            updateInstruction("جاري التسخين... نراقب تغير اللون.");
+            
+            let timer = 0;
+            const interval = setInterval(() => {
+                timer += 1;
+                state.heatTime = timer;
+                if(timer >= 5) {
+                    clearInterval(interval);
+                    checkReaction();
+                    stopHeat();
                 }
-            };
-            return map[tid];
+            }, 1000);
         }
 
-        function showResult(testName, res) {
-            document.getElementById('liquid-reagent').style.backgroundColor = res.color;
-            document.getElementById('ring-layer').style.opacity = res.ring ? '1' : '0';
-            if(res.ring) document.getElementById('ring-layer').style.backgroundColor = res.ring;
+        function stopHeat() {
+            state.isHeating = false;
+            document.getElementById('burner-device').classList.remove('burner-active');
+            document.getElementById('bubble-container').style.display = 'none';
+        }
 
-            const card = document.getElementById('status-card');
-            card.style.opacity = '1';
-            card.style.translate = '0';
+        function startHydrolysis() {
+            if(!state.sample) return;
+            updateInstruction("جاري إضافة HCl والتسخين للتحلل المائي...");
+            
+            setTimeout(() => {
+                state.isHydrolyzed = true;
+                addToLog("اكتمل التحلل المائي للسكروز/النشأ إلى سكريات أحادية.", 'warn');
+                updateInstruction("اكتمل التحلل. العينة الآن تحتوي على سكريات أحادية.");
+            }, 3000);
+        }
 
-            document.getElementById('st-title').innerText = testName;
-            document.getElementById('st-result').innerText = res.pos ? "نتيجة إيجابية (+ve)" : "نتيجة سلبية (-ve)";
-            document.getElementById('st-result').className = res.pos ? "text-sm font-bold mt-1 text-emerald-400" : "text-sm font-bold mt-1 text-red-400";
-            document.getElementById('st-desc').innerText = res.desc;
-            document.getElementById('st-formula').innerText = res.formula;
-            document.getElementById('micro-view').innerHTML = `<span class="text-5xl animate-pulse">${res.micro}</span>`;
+        function checkReaction() {
+            const sid = state.sample.id;
+            const rid = state.reagent.id;
+            let result = { pos: false, color: '', obs: '', desc: '' };
 
-            if(res.pos) {
-                totalXP = Math.min(100, totalXP + 10);
-                document.getElementById('xp-bar').style.width = totalXP + '%';
+            switch(rid) {
+                case 'mol':
+                    result = { pos: true, color: 'rgba(147, 51, 234, 0.4)', obs: 'تكون حلقة بنفسجية', desc: 'يدل على وجود كربوهيدرات (تكون الفرفورال).' };
+                    break;
+                
+                case 'ben':
+                    if(sid === 'glu' || sid === 'fru' || sid === 'xyl' || sid === 'mal' || state.isHydrolyzed) {
+                        result = { pos: true, color: '#ea580c', obs: 'راسب أحمر طوبي', desc: 'وجود سكر مختزل (اختزال أيونات النحاسيك).' };
+                    } else {
+                        result = { pos: false, color: '#3b82f6', obs: 'بقاء اللون الأزرق', desc: 'لا يوجد سكر مختزل (السكروز والنشأ سلبي).' };
+                    }
+                    break;
+
+                case 'iod':
+                    if(sid === 'sta' && !state.isHydrolyzed) {
+                        result = { pos: true, color: '#1e1b4b', obs: 'لون أزرق داكن', desc: 'تكون معقد اليود مع الأميلوز.' };
+                    } else {
+                        result = { pos: false, color: '#78350f', obs: 'لون اليود الأصلي', desc: 'سلبي (لا يوجد نشأ معقد).' };
+                    }
+                    break;
+
+                case 'bar':
+                    if((sid === 'glu' || sid === 'fru' || sid === 'xyl' || state.isHydrolyzed)) {
+                        result = { pos: true, color: '#991b1b', obs: 'راسب أحمر (سريع)', desc: 'سكر أحادي مختزل.' };
+                    } else if(sid === 'mal') {
+                        result = { pos: false, color: '#3b82f6', obs: 'تفاعل بطيء جداً', desc: 'السكريات الثنائية لا تتفاعل بسرعة مع هذا الكاشف.' };
+                    } else {
+                        result = { pos: false, color: '#60a5fa', obs: 'لا تفاعل', desc: 'سلبي.' };
+                    }
+                    break;
+
+                case 'sel':
+                    if(sid === 'fru' || sid === 'suc' || state.isHydrolyzed) {
+                        result = { pos: true, color: '#dc2626', obs: 'لون أحمر كرزي', desc: 'وجود سكر كيتوني (الكيتوزات تتفاعل أسرع).' };
+                    } else {
+                        result = { pos: false, color: '#fef3c7', obs: 'لون أصفر شاحب', desc: 'الألدوزات تتفاعل ببطء شديد.' };
+                    }
+                    break;
+
+                case 'bia':
+                    if(sid === 'xyl') {
+                        result = { pos: true, color: '#065f46', obs: 'لون أخضر مزرق', desc: 'وجود سكر خماسي (بنتوز).' };
+                    } else {
+                        result = { pos: false, color: '#78350f', obs: 'لون بني/أصفر', desc: 'سكر سداسي (هكسوز).' };
+                    }
+                    break;
             }
 
-            updateRadar(res.stats);
-            log(testName, activeSample.name, res.pos);
+            displayResult(result);
         }
 
-        // --- أدوات مساعدة ---
-        function highlight(prefix, id, color) {
-            document.querySelectorAll(`[id^="${prefix}"]`).forEach(el => el.classList.remove(`border-${color}-500`, `bg-${color}-500/10`));
-            document.getElementById(prefix + id).classList.add(`border-${color}-500`, `bg-${color}-500/10`);
+        function displayResult(res) {
+            const rLayer = document.getElementById('layer-reaction');
+            rLayer.style.height = '90%';
+            rLayer.style.backgroundColor = res.color;
+
+            const panel = document.getElementById('result-panel');
+            panel.style.opacity = '1';
+            panel.style.transform = 'translateY(0)';
+
+            document.getElementById('res-title').innerText = state.reagent.name;
+            document.getElementById('res-desc').innerText = res.desc;
+            document.getElementById('res-struct').innerText = state.sample.formula;
+            document.getElementById('res-obs').innerText = res.obs;
+            
+            const badge = document.getElementById('res-badge');
+            badge.innerText = res.pos ? 'إيجابي (Positive)' : 'سلبي (Negative)';
+            badge.className = res.pos ? 'px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400' : 'px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400';
+
+            addToLog(`النتيجة: ${res.obs}`, res.pos ? 'pos' : 'neg');
         }
 
-        function resetLabUI() {
-            document.getElementById('liquid-reagent').style.height = '0%';
-            document.getElementById('ring-layer').style.opacity = '0';
-            document.getElementById('status-card').style.opacity = '0';
-            document.getElementById('micro-view').innerHTML = `<span class="text-4xl filter grayscale opacity-20">🔬</span>`;
+        function createBubbles() {
+            const container = document.getElementById('bubble-container');
+            container.innerHTML = '';
+            for(let i=0; i<20; i++) {
+                const b = document.createElement('div');
+                b.className = 'bubble';
+                b.style.left = Math.random() * 100 + '%';
+                b.style.width = b.style.height = (Math.random() * 8 + 2) + 'px';
+                b.style.animationDelay = Math.random() * 1 + 's';
+                container.appendChild(b);
+            }
         }
 
-        function notify(msg, cls = "text-emerald-400") {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.className = `fixed top-20 left-1/2 -translate-x-1/2 glass border-emerald-500/50 ${cls} px-8 py-3 rounded-full text-sm font-bold opacity-100 transition-all z-[100]`;
-            setTimeout(() => t.style.opacity = '0', 3000);
+        function updateInstruction(text) {
+            document.getElementById('instruction-text').innerText = text;
         }
 
-        function log(test, sample, pos) {
-            const container = document.getElementById('log-container');
-            if(container.querySelector('p')) container.innerHTML = '';
-            const div = document.createElement('div');
-            div.className = `p-3 rounded-xl bg-white/5 border-r-4 ${pos ? 'border-emerald-500' : 'border-red-500'} text-[10px] animate-fade-in`;
-            div.innerHTML = `<b>${test}</b> تم على <b>${sample}</b>: <span class="${pos?'text-emerald-400':'text-red-400'}">${pos?'ناجح':'سلبي'}</span>`;
-            container.prepend(div);
+        function resetLab() {
+            state = { sample: null, reagent: null, isHeating: false, heatTime: 0, isHydrolyzed: false, logs: state.logs };
+            document.getElementById('layer-sample').style.height = '0';
+            document.getElementById('layer-reagent').style.height = '0';
+            document.getElementById('layer-reaction').style.height = '0';
+            document.getElementById('molisch-ring').style.opacity = '0';
+            document.getElementById('tube-label').style.opacity = '0';
+            document.getElementById('result-panel').style.opacity = '0';
+            document.getElementById('result-panel').style.transform = 'translateY(100%)';
+            stopHeat();
         }
 
-        function initRadar() {
-            const ctx = document.getElementById('radarChart').getContext('2d');
-            radar = new Chart(ctx, {
-                type: 'radar',
-                data: {
-                    labels: ['التركيز', 'السرعة', 'الاستقرار'],
-                    datasets: [{ data: [0,0,0], backgroundColor: 'rgba(16, 185, 129, 0.2)', borderColor: '#10b981', borderWidth: 2 }]
-                },
-                options: {
-                    scales: { r: { grid: { color: '#334155' }, angleLines: { color: '#334155' }, ticks: { display: false }, min: 0, max: 100 } },
-                    plugins: { legend: { display: false } }
-                }
-            });
+        function addToLog(msg, type) {
+            const log = document.getElementById('lab-log');
+            const entry = document.createElement('div');
+            let color = 'text-slate-400';
+            if(type === 'pos') color = 'text-emerald-400';
+            if(type === 'neg') color = 'text-red-400';
+            if(type === 'warn') color = 'text-blue-400';
+            
+            entry.className = `p-3 rounded-xl bg-white/5 border-r-2 border-slate-700 ${color}`;
+            entry.innerHTML = `
+                <div class="flex justify-between mb-1 opacity-50 text-[8px]">
+                    <span>${new Date().toLocaleTimeString('ar-EG')}</span>
+                    <span>#${log.children.length + 1}</span>
+                </div>
+                ${msg}
+            `;
+            log.prepend(entry);
+            document.getElementById('log-count').innerText = `${log.children.length}/20`;
         }
 
-        function updateRadar(data) {
-            radar.data.datasets[0].data = data;
-            radar.update();
-        }
+        initInventory();
     </script>
 </body>
 </html>
