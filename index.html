@@ -1,535 +1,514 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BioChem Professional Simulator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap');
-        
-        body {
-            font-family: 'IBM Plex Sans Arabic', sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
-            user-select: none;
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Beaker, Scale, Droplets, Target, 
+  RotateCcw, Info, FlaskConical, 
+  Thermometer, Flame, Waves, Clock, 
+  BookOpen, Zap, AlertCircle, 
+  Layers, Search, Droplet, Microscope,
+  Activity, Wind, ClipboardCheck
+} from 'lucide-react';
+
+const SAMPLES = [
+  { id: 'glu', name: 'الجلوكوز (Glucose)', type: 'أحادي', formula: 'C6H12O6', behavior: 'سكر مختزل يعطي راسب أحمر طوبي مع بندكت.' },
+  { id: 'suc', name: 'السكروز (Sucrose)', type: 'ثنائي', formula: 'C12H22O11', behavior: 'سكر غير مختزل؛ يحتاج لتحلل مائي (HCl + حرارة).' },
+  { id: 'sta', name: 'النشأ (Starch)', type: 'متعدد', formula: '(C6H10O5)n', behavior: 'يعطي معقد أزرق مع اليود يختفي بالتسخين.' },
+  { id: 'pen', name: 'البنتوز (Pentose)', type: 'خماسي', formula: 'C5H10O5', behavior: 'يتفاعل مع كاشف بيال ليعطي لوناً مخضراً.' }
+];
+
+const REAGENTS = [
+  { id: 'benedict', name: 'كاشف بندكت', color: '#3b82f6', info: 'للكشف عن السكريات المختزلة' },
+  { id: 'iodine', name: 'محلول اليود', color: '#92400e', info: 'للكشف عن السكريات المتعددة' },
+  { id: 'bial', name: 'كاشف بيال', color: '#10b981', info: 'للكشف عن سكر البنتوز' },
+  { id: 'hcl', name: 'حمض HCl المركز', color: '#f8fafc', info: 'للتحلل المائي وتوفير وسط حمضي' }
+];
+
+export default function AdvancedUniversityLab() {
+  const [activeTab, setActiveTab] = useState('exp');
+  const [temp, setTemp] = useState(24.2);
+  const [isHeating, setIsHeating] = useState(false);
+  const [weight, setWeight] = useState(0.000);
+  const [tubeContent, setTubeContent] = useState({ sample: null, reagents: [], hydrolyzed: false, state: 'liquid' });
+  const [liquidColor, setLiquidColor] = useState('rgba(255,255,255,0.05)');
+  const [precipitate, setPrecipitate] = useState(0); // 0 to 100 opacity
+  const [logs, setLogs] = useState([]);
+  const [isMagnifying, setIsMagnifying] = useState(false);
+  const [safetyGear, setSafetyGear] = useState(false);
+
+  // Thermodynamics Engine
+  useEffect(() => {
+    let timer;
+    if (isHeating) {
+      timer = setInterval(() => {
+        setTemp(prev => {
+          const inc = prev < 90 ? Math.random() * 0.5 + 0.3 : Math.random() * 0.1;
+          return Math.min(prev + inc, 102.5);
+        });
+      }, 150);
+    } else {
+      timer = setInterval(() => {
+        setTemp(prev => Math.max(prev - 0.15, 24.2));
+      }, 300);
+    }
+    return () => clearInterval(timer);
+  }, [isHeating]);
+
+  // Chemical Logic Engine (Based on Lab PDF)
+  useEffect(() => {
+    const { sample, reagents, hydrolyzed } = tubeContent;
+    
+    // Reset visuals if empty
+    if (!sample) {
+      setLiquidColor('rgba(255,255,255,0.05)');
+      setPrecipitate(0);
+      return;
+    }
+
+    // 1. Hydrolysis (Sucrose Logic)
+    if (sample.id === 'suc' && reagents.includes('hcl') && temp > 85 && !hydrolyzed) {
+      setTubeContent(prev => ({ ...prev, hydrolyzed: true }));
+      addLog("بدأ تفاعل التحلل المائي: السكروز يتحول إلى جلوكوز + فركتوز.");
+    }
+
+    // 2. Benedict's Reaction (Reducing Sugars)
+    if (reagents.includes('benedict')) {
+      if (temp > 70 && (sample.id === 'glu' || (sample.id === 'suc' && hydrolyzed))) {
+        setLiquidColor('#ea580c'); // Orange/Red
+        setPrecipitate(Math.min((temp - 70) * 2, 90));
+      } else {
+        setLiquidColor('#2563eb'); // Benedict Blue
+        setPrecipitate(0);
+      }
+    } 
+    // 3. Iodine Reaction (Starch)
+    else if (reagents.includes('iodine')) {
+      if (sample.id === 'sta') {
+        if (temp > 60) {
+          // Heat destroys the starch-iodine complex (Helix structure)
+          setLiquidColor('rgba(146, 64, 14, 0.4)'); // Faint iodine color
+          setPrecipitate(0);
+        } else {
+          setLiquidColor('#1e1b4b'); // Deep Blue/Black
+          setPrecipitate(40);
         }
+      } else {
+        setLiquidColor('#92400e'); // Just iodine color
+        setPrecipitate(0);
+      }
+    }
+    // 4. Bial's Test (Pentose)
+    else if (reagents.includes('bial') && reagents.includes('hcl')) {
+      if (sample.id === 'pen' && temp > 90) {
+        setLiquidColor('#064e3b'); // Dark Greenish-Blue
+        setPrecipitate(20);
+      } else {
+        setLiquidColor('#d1d5db'); // Initial Bial's color
+      }
+    }
+  }, [temp, tubeContent]);
 
-        .lab-bench {
-            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
-            background-size: cover;
-        }
+  const addLog = (msg) => {
+    setLogs(prev => [{ id: Date.now(), msg, time: new Date().toLocaleTimeString('ar-EG') }, ...prev]);
+  };
 
-        /* Test Tube Styling */
-        .tube-holder {
-            width: 120px;
-            height: 350px;
-            position: relative;
-            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
-        }
+  const handleAddSample = (s) => {
+    setTubeContent({ sample: s, reagents: [], hydrolyzed: false });
+    setLiquidColor('rgba(240,249,255,0.3)');
+    addLog(`تم حقن عينة: ${s.name}`);
+  };
 
-        .glass-tube {
-            width: 80px;
-            height: 300px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(5px);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-bottom-left-radius: 40px;
-            border-bottom-right-radius: 40px;
-            position: relative;
-            margin: 0 auto;
-            overflow: hidden;
-            z-index: 10;
-        }
+  const handleAddReagent = (rId) => {
+    if (!tubeContent.sample) return;
+    setTubeContent(prev => ({ ...prev, reagents: [...new Set([...prev.reagents, rId])] }));
+    addLog(`إضافة كاشف: ${REAGENTS.find(r => r.id === rId).name}`);
+  };
 
-        .glass-tube::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 15%;
-            width: 15%; height: 100%;
-            background: linear-gradient(to right, rgba(255,255,255,0.15), transparent);
-        }
-
-        .liquid-layer {
-            position: absolute;
-            bottom: 0;
-            width: 100%;
-            transition: all 2s ease-in-out;
-        }
-
-        /* Specific Test Effects */
-        .molisch-ring {
-            position: absolute;
-            bottom: 40%;
-            width: 100%;
-            height: 10px;
-            background: rgba(147, 51, 234, 0.8);
-            filter: blur(4px);
-            opacity: 0;
-            transition: opacity 2s;
-            z-index: 35;
-        }
-
-        .bubbles {
-            position: absolute;
-            bottom: 10px;
-            width: 100%;
-            display: none;
-        }
-
-        @keyframes rise {
-            0% { transform: translateY(0); opacity: 0.8; }
-            100% { transform: translateY(-200px); opacity: 0; }
-        }
-
-        .bubble {
-            position: absolute;
-            background: rgba(255,255,255,0.4);
-            border-radius: 50%;
-            animation: rise 1.5s infinite;
-        }
-
-        .burner-active .flame {
-            display: block;
-        }
-
-        .flame {
-            display: none;
-            width: 30px;
-            height: 60px;
-            background: radial-gradient(circle at bottom, #60a5fa, #2563eb, transparent);
-            border-radius: 50% 50% 20% 20%;
-            filter: blur(5px);
-            animation: flicker 0.1s infinite alternate;
-            position: absolute;
-            bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        @keyframes flicker {
-            0% { transform: translateX(-50%) scale(1); }
-            100% { transform: translateX(-50%) scale(1.1); opacity: 0.8; }
-        }
-
-        /* Tooltip-like Info */
-        .info-card {
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-        }
-
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-    </style>
-</head>
-<body class="h-screen flex flex-col overflow-hidden">
-
-    <!-- Top Bar -->
-    <nav class="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-8 shrink-0 shadow-2xl z-50">
-        <div class="flex items-center gap-4">
-            <div class="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-900/20">
-                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.642.257a4 4 0 01-1.536.303H10a2 2 0 01-2-2V8a2 2 0 012-2h.341a4 4 0 011.536.303l.642.257a6 6 0 003.86.517l2.387-.477a2 2 0 001.022-.547l.54-.54a2 2 0 012.829 0l1.414 1.414a2 2 0 010 2.829l-.54.54z"></path></svg>
+  return (
+    <div className="flex h-screen bg-[#050507] text-slate-200 font-sans overflow-hidden select-none" dir="rtl">
+      
+      {/* Premium Sidebar */}
+      <aside className="w-80 border-l border-white/5 bg-[#0a0b0e] flex flex-col shadow-2xl z-30 relative">
+        <div className="p-8 border-b border-white/5 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-[60px] -mr-16 -mt-16"></div>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="p-3 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl shadow-lg shadow-blue-900/20">
+              <FlaskConical size={24} className="text-white" />
             </div>
             <div>
-                <h1 class="text-sm font-bold text-slate-100">Virtual BioChem Lab</h1>
-                <p class="text-[10px] text-emerald-500 font-mono tracking-tighter uppercase">Professional Simulator v2.1</p>
+              <h1 className="font-black text-sm tracking-tight text-white leading-tight">مختبر الأيض الحيوي</h1>
+              <p className="text-[10px] text-blue-400/80 font-bold uppercase tracking-widest mt-1">البروتوكول الجامعي المتقدم</p>
             </div>
+          </div>
         </div>
-        
-        <div class="flex items-center gap-6">
-            <div id="status-display" class="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-full border border-slate-700">
-                <div class="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></div>
-                <span class="text-[10px] text-slate-400 font-medium">نظام المراقبة: جاهز</span>
-            </div>
-            <button onclick="resetLab()" class="text-[11px] font-semibold text-slate-400 hover:text-white transition-colors">إعادة تهيئة المعمل</button>
+
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+          <div className="px-4 py-2 flex items-center justify-between">
+            <span className="text-[10px] font-black text-slate-500 uppercase">المحطات</span>
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          </div>
+          
+          {[
+            { id: 'exp', name: 'منصة التفاعل الكيميائي', icon: Beaker, desc: 'التحليل الكيفي' },
+            { id: 'balance', name: 'الميزان الرقمي الدقيق', icon: Scale, desc: 'الوزن الجزيئي' },
+            { id: 'micro', name: 'وحدة الفحص المجهري', icon: Microscope, desc: 'دراسة الراسب' },
+            { id: 'manual', name: 'دليل الكواشف الكيميائية', icon: BookOpen, desc: 'المرجع العلمي' }
+          ].map(item => (
+            <button 
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full group text-right px-4 py-4 rounded-2xl transition-all relative overflow-hidden ${activeTab === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/20' : 'hover:bg-white/5 text-slate-400 border border-transparent hover:border-white/5'}`}
+            >
+              <div className="flex items-center gap-4 relative z-10">
+                <item.icon size={20} className={activeTab === item.id ? 'text-white' : 'text-slate-500 group-hover:text-blue-400'} />
+                <div>
+                  <div className="text-xs font-black">{item.name}</div>
+                  <div className={`text-[9px] mt-0.5 ${activeTab === item.id ? 'text-blue-100' : 'text-slate-600'}`}>{item.desc}</div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-6 bg-black/40 border-t border-white/5 space-y-4">
+          <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
+             <div className={`w-3 h-3 rounded-full ${safetyGear ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-red-500'}`}></div>
+             <span className="text-[10px] font-bold text-slate-400">معدات السلامة: {safetyGear ? 'مفعلة' : 'غير مكتملة'}</span>
+          </div>
+          <button 
+            onClick={() => setSafetyGear(!safetyGear)}
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-[10px] font-black transition-all"
+          >
+            ارتداء المعطف والقفازات
+          </button>
         </div>
-    </nav>
+      </aside>
 
-    <div class="flex-1 flex overflow-hidden">
+      {/* Main Lab Space */}
+      <main className="flex-1 flex flex-col relative">
         
-        <!-- Inventory Sidebar -->
-        <aside class="w-80 bg-slate-900/50 border-l border-slate-800 p-6 flex flex-col gap-8 custom-scroll overflow-y-auto">
-            
-            <section>
-                <header class="flex items-center gap-2 mb-4">
-                    <span class="w-1 h-4 bg-emerald-500 rounded-full"></span>
-                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">العينات الكربوهيدراتية</h2>
-                </header>
-                <div id="samples-grid" class="grid gap-2">
-                    <!-- Dynamic Content -->
+        {/* Instrumentation Dashboard */}
+        <header className="h-28 bg-[#0a0b0e]/90 backdrop-blur-2xl border-b border-white/5 flex items-center justify-between px-12 z-20">
+          <div className="flex gap-16">
+            <div className="relative group">
+              <div className="flex flex-col">
+                <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1">
+                  <Activity size={10}/> مراقب الحرارة
+                </span>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className={`text-4xl font-mono font-black tabular-nums transition-colors ${temp > 80 ? 'text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.3)]' : 'text-blue-400'}`}>
+                    {temp.toFixed(1)}
+                  </span>
+                  <span className="text-sm font-bold text-slate-500">°C</span>
                 </div>
-            </section>
-
-            <section>
-                <header class="flex items-center gap-2 mb-4">
-                    <span class="w-1 h-4 bg-blue-500 rounded-full"></span>
-                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">الكواشف الكيميائية</h2>
-                </header>
-                <div id="reagents-grid" class="grid gap-2">
-                    <!-- Dynamic Content -->
-                </div>
-            </section>
-
-            <section>
-                <header class="flex items-center gap-2 mb-4">
-                    <span class="w-1 h-4 bg-red-500 rounded-full"></span>
-                    <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">المعالجات الفيزيائية</h2>
-                </header>
-                <div class="space-y-2">
-                    <button onclick="applyHeat()" class="w-full py-3 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 rounded-xl transition-all flex items-center justify-between px-4 group">
-                        <span class="text-xs font-semibold text-red-400">تسخين (Water Bath)</span>
-                        <span class="text-lg group-hover:animate-bounce">🔥</span>
-                    </button>
-                    <button id="hydrolysis-btn" onclick="startHydrolysis()" class="w-full py-3 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 rounded-xl transition-all flex items-center justify-between px-4 group disabled:opacity-30">
-                        <span class="text-xs font-semibold text-blue-400">تحلل مائي (H₂O/H⁺)</span>
-                        <span class="text-lg">🧪</span>
-                    </button>
-                </div>
-            </section>
-
-        </aside>
-
-        <!-- Main Workspace -->
-        <main class="flex-1 lab-bench relative flex flex-col items-center justify-center p-12">
-            
-            <!-- Real-time Instruction -->
-            <div class="absolute top-10 left-1/2 -translate-x-1/2 w-[500px] text-center">
-                <div id="instruction-box" class="bg-black/40 backdrop-blur-md border border-white/5 p-4 rounded-2xl shadow-2xl transition-all">
-                    <p id="instruction-text" class="text-sm text-slate-300">مرحباً بك في المختبر. ابدأ باختيار عينة لوضعها في أنبوب الاختبار.</p>
-                </div>
+              </div>
+              <div className="absolute -bottom-2 left-0 h-1 bg-white/5 w-full rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${temp}%` }}></div>
+              </div>
             </div>
 
-            <!-- The Bench -->
-            <div class="relative flex flex-col items-center">
-                <!-- Tube Holder -->
-                <div class="tube-holder flex flex-col items-center">
-                    <div id="tube" class="glass-tube">
-                        <!-- Liquid Layers -->
-                        <div id="layer-sample" class="liquid-layer bg-slate-400/20 h-0 z-10"></div>
-                        <div id="layer-reagent" class="liquid-layer bg-transparent h-0 z-20"></div>
-                        <div id="layer-reaction" class="liquid-layer bg-transparent h-0 z-30"></div>
-                        <div id="molisch-ring" class="molisch-ring"></div>
-                        
-                        <!-- Bubbles -->
-                        <div id="bubble-container" class="bubbles"></div>
-                    </div>
-                    
-                    <!-- Label -->
-                    <div id="tube-label" class="mt-6 px-4 py-1 bg-slate-800 border border-slate-700 rounded text-[10px] font-mono text-slate-400 opacity-0 transition-opacity uppercase tracking-tighter">EMPTY</div>
-                </div>
-
-                <!-- Burner Device -->
-                <div id="burner-device" class="mt-8 relative">
-                    <div class="flame"></div>
-                    <div class="w-20 h-10 bg-gradient-to-b from-slate-700 to-slate-900 rounded-t-xl border-t border-slate-600"></div>
-                </div>
+            <div className="flex flex-col justify-center">
+              <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1">
+                <Wind size={10}/> تهوية الحجرة
+              </span>
+              <div className="flex items-center gap-3 mt-2">
+                 <div className="flex gap-1">
+                   {[1,2,3].map(i => <div key={i} className={`w-1 h-4 rounded-full ${i <= 2 ? 'bg-emerald-500' : 'bg-white/10'}`}></div>)}
+                 </div>
+                 <span className="text-[10px] font-bold text-emerald-500">OPTIMAL</span>
+              </div>
             </div>
+          </div>
 
-            <!-- Result Panel (Floating) -->
-            <div id="result-panel" class="absolute bottom-10 right-10 w-96 info-card rounded-3xl p-6 transform translate-y-full opacity-0 transition-all duration-700 overflow-hidden">
-                <div class="relative z-10">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">تحليل العينة النهائي</h3>
-                        <span id="res-badge" class="px-2 py-0.5 rounded text-[9px] font-bold"></span>
-                    </div>
-                    <h2 id="res-title" class="text-xl font-bold text-white mb-2"></h2>
-                    <p id="res-desc" class="text-xs text-slate-400 leading-relaxed mb-4"></p>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div class="p-3 bg-white/5 rounded-2xl border border-white/5">
-                            <span class="block text-[8px] text-slate-500 uppercase mb-1">التركيب الكيميائي</span>
-                            <span id="res-struct" class="text-[10px] text-blue-400 font-mono"></span>
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col items-end mr-6">
+               <span className="text-[9px] text-slate-500 font-black mb-1">حالة المصدر الحراري</span>
+               <div className={`px-3 py-1 rounded-full text-[8px] font-black ${isHeating ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-white/5 text-slate-500'}`}>
+                 {isHeating ? 'BUNSEN BURNER: ACTIVE' : 'BUNSEN BURNER: IDLE'}
+               </div>
+            </div>
+            <button 
+              disabled={!safetyGear}
+              onClick={() => setIsHeating(!isHeating)}
+              className={`h-14 px-8 rounded-2xl font-black text-xs transition-all flex items-center gap-3 shadow-2xl ${!safetyGear ? 'opacity-20 cursor-not-allowed bg-slate-800' : isHeating ? 'bg-red-600 hover:bg-red-500 text-white animate-pulse' : 'bg-orange-600 hover:bg-orange-500 text-white hover:scale-105'}`}
+            >
+              <Flame size={18}/> {isHeating ? 'إطفاء اللهب' : 'بدء التسخين'}
+            </button>
+            <button 
+              onClick={() => {
+                setTubeContent({ sample: null, reagents: [], hydrolyzed: false });
+                setLiquidColor('rgba(255,255,255,0.05)');
+                setPrecipitate(0);
+                addLog("تم تنظيف وتعقيم أنبوب الاختبار.");
+              }}
+              className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all"
+              title="تفريغ الأنبوب"
+            >
+              <RotateCcw size={20} className="text-slate-400"/>
+            </button>
+          </div>
+        </header>
+
+        {/* Dynamic Lab Table */}
+        <div className="flex-1 relative bg-[#08090b] flex items-center justify-center p-12 overflow-hidden">
+          
+          {/* Floor & Shadows */}
+          <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/60 to-transparent pointer-events-none"></div>
+          
+          {/* Main Visualizer */}
+          {activeTab === 'exp' && (
+            <div className="grid grid-cols-12 w-full max-w-7xl h-full gap-10">
+              
+              {/* Left: Chemical Inventory */}
+              <div className="col-span-3 space-y-6 overflow-y-auto custom-scrollbar pr-2 py-4">
+                <section>
+                  <h4 className="text-[10px] font-black text-slate-600 uppercase mb-4 tracking-widest flex items-center gap-2">
+                    <Layers size={14}/> بنك العينات (Samples)
+                  </h4>
+                  <div className="space-y-2">
+                    {SAMPLES.map(s => (
+                      <button 
+                        key={s.id}
+                        onClick={() => handleAddSample(s)}
+                        className={`w-full p-4 rounded-2xl border text-right transition-all group relative overflow-hidden ${tubeContent.sample?.id === s.id ? 'bg-blue-600 border-blue-400 shadow-[0_0_20px_rgba(37,99,235,0.3)]' : 'bg-[#0f1115] border-white/5 hover:border-white/20'}`}
+                      >
+                        <div className="relative z-10">
+                          <div className="text-xs font-black text-white">{s.name}</div>
+                          <div className="text-[8px] opacity-50 font-mono mt-1 tracking-tighter">{s.behavior}</div>
                         </div>
-                        <div class="p-3 bg-white/5 rounded-2xl border border-white/5">
-                            <span class="block text-[8px] text-slate-500 uppercase mb-1">الملاحظة المخبرية</span>
-                            <span id="res-obs" class="text-[10px] text-emerald-400 font-medium"></span>
+                        {tubeContent.sample?.id === s.id && <div className="absolute top-0 right-0 w-1 h-full bg-white animate-pulse"></div>}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section>
+                  <h4 className="text-[10px] font-black text-slate-600 uppercase mb-4 tracking-widest flex items-center gap-2">
+                    <Droplet size={14}/> الكواشف (Reagents)
+                  </h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {REAGENTS.map(r => (
+                      <button 
+                        key={r.id}
+                        onClick={() => handleAddReagent(r.id)}
+                        disabled={!tubeContent.sample}
+                        className={`p-3 rounded-xl text-[10px] font-black text-right border transition-all ${!tubeContent.sample ? 'opacity-20 grayscale cursor-not-allowed' : 'bg-[#0f1115] border-white/5 hover:bg-blue-600/20 hover:border-blue-500/40'}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span>{r.name}</span>
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: r.color }}></div>
                         </div>
-                    </div>
-                </div>
-                <!-- Background Decoration -->
-                <div class="absolute top-0 right-0 -m-4 w-24 h-24 bg-blue-600/10 rounded-full blur-3xl"></div>
-            </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </div>
 
-        </main>
-
-        <!-- Academic Log Sidebar -->
-        <aside class="w-80 bg-slate-900/50 border-r border-slate-800 p-6 flex flex-col shadow-inner">
-            <header class="flex items-center justify-between mb-6">
-                <h2 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">السجل العلمي</h2>
-                <span class="text-[9px] bg-slate-800 px-2 py-1 rounded text-slate-500 font-mono" id="log-count">00/00</span>
-            </header>
-            
-            <div id="lab-log" class="flex-1 space-y-4 overflow-y-auto pr-2 custom-scroll text-[11px]">
-                <!-- Log entries -->
-            </div>
-
-            <div class="mt-6 pt-6 border-t border-slate-800">
-                <div class="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
-                    <p class="text-[10px] text-emerald-400 font-medium leading-relaxed">
-                        <span class="font-bold">نصيحة المختبر:</span>
-                        تأكد دائماً من إضافة الكاشف قبل البدء بالتسخين للحصول على نتائج دقيقة في اختبارات الاختزال.
-                    </p>
-                </div>
-            </div>
-        </aside>
-    </div>
-
-    <script>
-        // Full Data from the provided manual
-        const DATA = {
-            samples: [
-                { id: 'glu', name: 'جلوكوز', type: 'سكر أحادي (ألدوز)', formula: 'C₆H₁₂O₆', info: 'سكر مختزل يعطي نتيجة إيجابية سريعة.' },
-                { id: 'fru', name: 'فركتوز', type: 'سكر أحادي (كيتوز)', formula: 'C₆H₁₂O₆', info: 'سكر كيتوني يتفاعل بسرعة مع كاشف سليوانوف.' },
-                { id: 'xyl', name: 'زايلوز', type: 'سكر خماسي (بنتوز)', formula: 'C₅H₁₀O₅', info: 'سكر خماسي يعطي لوناً مميزاً مع كاشف بيال.' },
-                { id: 'suc', name: 'سكروز', type: 'سكر ثنائي', formula: 'C₁₂H₂₂O₁₁', info: 'سكر غير مختزل يتطلب تحللاً مائياً ليعطي نتائج إيجابية.' },
-                { id: 'mal', name: 'مالتوز', type: 'سكر ثنائي مختزل', formula: 'C₁₂H₂₂O₁₁', info: 'يتكون من وحدتي جلوكوز، مختزل ببطء في اختبار بارفويد.' },
-                { id: 'sta', name: 'نشأ', type: 'سكر متعدد', formula: '(C₆H₁₀O₅)n', info: 'بوليمر معقد، يتفاعل حصرياً مع اليود.' }
-            ],
-            reagents: [
-                { id: 'mol', name: 'كاشف مولش', color: '#a855f7', needsHeat: false, desc: 'كاشف عام لكل الكربوهيدرات.' },
-                { id: 'ben', name: 'كاشف بندكت', color: '#3b82f6', needsHeat: true, desc: 'للكشف عن السكريات المختزلة.' },
-                { id: 'bar', name: 'كاشف بارفويد', color: '#60a5fa', needsHeat: true, desc: 'للتمييز بين السكر الأحادي والثنائي.' },
-                { id: 'sel', name: 'كاشف سليوانوف', color: '#fbbf24', needsHeat: true, desc: 'للتمييز بين الألدوز والكيتوز.' },
-                { id: 'bia', name: 'كاشف بيال', color: '#f59e0b', needsHeat: true, desc: 'للكشف عن السكريات الخماسية.' },
-                { id: 'iod', name: 'محلول اليود', color: '#78350f', needsHeat: false, desc: 'للكشف عن النشأ.' }
-            ]
-        };
-
-        let state = {
-            sample: null,
-            reagent: null,
-            isHeating: false,
-            heatTime: 0,
-            isHydrolyzed: false,
-            logs: []
-        };
-
-        // Initialize Inventory
-        function initInventory() {
-            const sGrid = document.getElementById('samples-grid');
-            const rGrid = document.getElementById('reagents-grid');
-
-            sGrid.innerHTML = DATA.samples.map(s => `
-                <button onclick="pickSample('${s.id}')" class="text-right p-3 bg-white/5 border border-white/5 rounded-xl hover:border-emerald-500/40 transition group">
-                    <div class="text-[11px] font-bold group-hover:text-emerald-400 transition-colors">${s.name}</div>
-                    <div class="text-[9px] text-slate-500">${s.type}</div>
-                </button>
-            `).join('');
-
-            rGrid.innerHTML = DATA.reagents.map(r => `
-                <button onclick="addReagent('${r.id}')" class="text-right p-3 bg-white/5 border border-white/5 rounded-xl hover:border-blue-500/40 transition group">
-                    <div class="text-[11px] font-bold group-hover:text-blue-400 transition-colors">${r.name}</div>
-                    <div class="text-[9px] text-slate-500">${r.needsHeat ? 'يتطلب تسخين' : 'تفاعل فوري'}</div>
-                </button>
-            `).join('');
-        }
-
-        function pickSample(id) {
-            resetLab();
-            state.sample = DATA.samples.find(s => s.id === id);
-            
-            // Visuals
-            document.getElementById('layer-sample').style.height = '30%';
-            const label = document.getElementById('tube-label');
-            label.innerText = state.sample.name;
-            label.style.opacity = '1';
-            
-            updateInstruction(`تم وضع عينة ${state.sample.name} في الأنبوب. اختر كاشفاً الآن.`);
-            addToLog(`تم تجهيز عينة من ${state.sample.name}.`, 'info');
-        }
-
-        function addReagent(id) {
-            if(!state.sample) return updateInstruction("اختر عينة أولاً!");
-            
-            state.reagent = DATA.reagents.find(r => r.id === id);
-            const rLayer = document.getElementById('layer-reagent');
-            rLayer.style.height = '60%';
-            rLayer.style.backgroundColor = state.reagent.color;
-            
-            addToLog(`إضافة ${state.reagent.name} للأنبوب.`, 'chem');
-
-            if(state.reagent.id === 'mol') {
-                // Special visual for Molisch (adding H2SO4)
-                updateInstruction("جاري إضافة حمض الكبريتيك المركز بحذر على الجدار الداخلي...");
-                setTimeout(() => {
-                    document.getElementById('molisch-ring').style.opacity = '1';
-                    checkReaction();
-                }, 2000);
-            } else if(!state.reagent.needsHeat) {
-                checkReaction();
-            } else {
-                updateInstruction(`كاشف ${state.reagent.name} يتطلب تسخيناً في حمام مائي.`);
-            }
-        }
-
-        function applyHeat() {
-            if(!state.reagent) return updateInstruction("أضف الكاشف قبل التسخين.");
-            if(state.isHeating) return;
-
-            state.isHeating = true;
-            document.getElementById('burner-device').classList.add('burner-active');
-            document.getElementById('bubble-container').style.display = 'block';
-            createBubbles();
-            
-            updateInstruction("جاري التسخين... نراقب تغير اللون.");
-            
-            let timer = 0;
-            const interval = setInterval(() => {
-                timer += 1;
-                state.heatTime = timer;
-                if(timer >= 5) {
-                    clearInterval(interval);
-                    checkReaction();
-                    stopHeat();
-                }
-            }, 1000);
-        }
-
-        function stopHeat() {
-            state.isHeating = false;
-            document.getElementById('burner-device').classList.remove('burner-active');
-            document.getElementById('bubble-container').style.display = 'none';
-        }
-
-        function startHydrolysis() {
-            if(!state.sample) return;
-            updateInstruction("جاري إضافة HCl والتسخين للتحلل المائي...");
-            
-            setTimeout(() => {
-                state.isHydrolyzed = true;
-                addToLog("اكتمل التحلل المائي للسكروز/النشأ إلى سكريات أحادية.", 'warn');
-                updateInstruction("اكتمل التحلل. العينة الآن تحتوي على سكريات أحادية.");
-            }, 3000);
-        }
-
-        function checkReaction() {
-            const sid = state.sample.id;
-            const rid = state.reagent.id;
-            let result = { pos: false, color: '', obs: '', desc: '' };
-
-            switch(rid) {
-                case 'mol':
-                    result = { pos: true, color: 'rgba(147, 51, 234, 0.4)', obs: 'تكون حلقة بنفسجية', desc: 'يدل على وجود كربوهيدرات (تكون الفرفورال).' };
-                    break;
+              {/* Center: Interactive Glassware */}
+              <div className="col-span-6 flex flex-col items-center justify-center relative">
                 
-                case 'ben':
-                    if(sid === 'glu' || sid === 'fru' || sid === 'xyl' || sid === 'mal' || state.isHydrolyzed) {
-                        result = { pos: true, color: '#ea580c', obs: 'راسب أحمر طوبي', desc: 'وجود سكر مختزل (اختزال أيونات النحاسيك).' };
-                    } else {
-                        result = { pos: false, color: '#3b82f6', obs: 'بقاء اللون الأزرق', desc: 'لا يوجد سكر مختزل (السكروز والنشأ سلبي).' };
-                    }
-                    break;
+                {/* Bunsen Burner Flame (Visual Only) */}
+                {isHeating && (
+                  <div className="absolute bottom-20 flex flex-col items-center">
+                    <div className="w-8 h-24 bg-gradient-to-t from-blue-600 via-blue-400 to-transparent blur-xl animate-pulse opacity-50"></div>
+                    <div className="w-4 h-16 bg-gradient-to-t from-orange-500 to-transparent blur-md -mt-10 animate-bounce opacity-40"></div>
+                  </div>
+                )}
 
-                case 'iod':
-                    if(sid === 'sta' && !state.isHydrolyzed) {
-                        result = { pos: true, color: '#1e1b4b', obs: 'لون أزرق داكن', desc: 'تكون معقد اليود مع الأميلوز.' };
-                    } else {
-                        result = { pos: false, color: '#78350f', obs: 'لون اليود الأصلي', desc: 'سلبي (لا يوجد نشأ معقد).' };
-                    }
-                    break;
+                {/* Steam & Boiling Particles */}
+                {temp > 88 && (
+                  <div className="absolute top-20 flex justify-center pointer-events-none">
+                    {[...Array(8)].map((_, i) => (
+                      <div key={i} className="absolute w-20 h-20 bg-white/5 blur-2xl rounded-full animate-steam" style={{ animationDelay: `${i * 0.3}s` }} />
+                    ))}
+                  </div>
+                )}
 
-                case 'bar':
-                    if((sid === 'glu' || sid === 'fru' || sid === 'xyl' || state.isHydrolyzed)) {
-                        result = { pos: true, color: '#991b1b', obs: 'راسب أحمر (سريع)', desc: 'سكر أحادي مختزل.' };
-                    } else if(sid === 'mal') {
-                        result = { pos: false, color: '#3b82f6', obs: 'تفاعل بطيء جداً', desc: 'السكريات الثنائية لا تتفاعل بسرعة مع هذا الكاشف.' };
-                    } else {
-                        result = { pos: false, color: '#60a5fa', obs: 'لا تفاعل', desc: 'سلبي.' };
-                    }
-                    break;
+                {/* The Professional Test Tube */}
+                <div className="relative group perspective-1000 transform-gpu transition-all duration-700 hover:scale-105">
+                  <div className="w-28 h-[480px] border-[5px] border-white/10 rounded-b-[70px] relative overflow-hidden backdrop-blur-[2px] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)]">
+                    
+                    {/* Glass Shine & Physics Reflection */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-white/10 via-transparent to-white/5 z-20 pointer-events-none"></div>
+                    <div className="absolute top-0 left-1/4 w-[1px] h-full bg-white/10 z-20"></div>
 
-                case 'sel':
-                    if(sid === 'fru' || sid === 'suc' || state.isHydrolyzed) {
-                        result = { pos: true, color: '#dc2626', obs: 'لون أحمر كرزي', desc: 'وجود سكر كيتوني (الكيتوزات تتفاعل أسرع).' };
-                    } else {
-                        result = { pos: false, color: '#fef3c7', obs: 'لون أصفر شاحب', desc: 'الألدوزات تتفاعل ببطء شديد.' };
-                    }
-                    break;
+                    {/* Liquid Engine */}
+                    <div 
+                      className="absolute bottom-0 w-full transition-all duration-[2000ms] cubic-bezier(0.4, 0, 0.2, 1) flex flex-col-reverse"
+                      style={{ height: tubeContent.sample ? '65%' : '0%', backgroundColor: liquidColor }}
+                    >
+                      {/* Boiling Bubbles */}
+                      {temp > 94 && [...Array(12)].map((_, i) => (
+                        <div key={i} className="absolute bg-white/30 rounded-full animate-bubble" 
+                          style={{ 
+                            left: `${20 + Math.random()*60}%`, 
+                            width: `${2 + Math.random()*4}px`, 
+                            height: `${2 + Math.random()*4}px`, 
+                            animationDelay: `${Math.random()}s` 
+                          }} 
+                        />
+                      ))}
+                      
+                      {/* Precipitation Layer (The "Realism" Touch) */}
+                      {precipitate > 0 && (
+                        <div 
+                          className="absolute bottom-0 w-full bg-orange-950/80 blur-[2px] transition-all duration-1000"
+                          style={{ 
+                            height: `${precipitate * 0.4}%`, 
+                            opacity: precipitate / 100,
+                            boxShadow: `0 -10px 20px rgba(0,0,0,0.5)`
+                          }}
+                        >
+                           {/* Small Grainy particles inside precipitate */}
+                           <div className="w-full h-full opacity-30 bg-[url('https://www.transparenttextures.com/patterns/asfalt-light.png')]"></div>
+                        </div>
+                      )}
 
-                case 'bia':
-                    if(sid === 'xyl') {
-                        result = { pos: true, color: '#065f46', obs: 'لون أخضر مزرق', desc: 'وجود سكر خماسي (بنتوز).' };
-                    } else {
-                        result = { pos: false, color: '#78350f', obs: 'لون بني/أصفر', desc: 'سكر سداسي (هكسوز).' };
-                    }
-                    break;
-            }
+                      {/* Liquid Surface Meniscus */}
+                      <div className="h-6 w-full bg-white/20 blur-[3px] absolute top-0 flex items-center justify-center">
+                         <div className="w-3/4 h-1 bg-white/40 rounded-full"></div>
+                      </div>
+                    </div>
+                  </div>
 
-            displayResult(result);
-        }
-
-        function displayResult(res) {
-            const rLayer = document.getElementById('layer-reaction');
-            rLayer.style.height = '90%';
-            rLayer.style.backgroundColor = res.color;
-
-            const panel = document.getElementById('result-panel');
-            panel.style.opacity = '1';
-            panel.style.transform = 'translateY(0)';
-
-            document.getElementById('res-title').innerText = state.reagent.name;
-            document.getElementById('res-desc').innerText = res.desc;
-            document.getElementById('res-struct').innerText = state.sample.formula;
-            document.getElementById('res-obs').innerText = res.obs;
-            
-            const badge = document.getElementById('res-badge');
-            badge.innerText = res.pos ? 'إيجابي (Positive)' : 'سلبي (Negative)';
-            badge.className = res.pos ? 'px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400' : 'px-2 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400';
-
-            addToLog(`النتيجة: ${res.obs}`, res.pos ? 'pos' : 'neg');
-        }
-
-        function createBubbles() {
-            const container = document.getElementById('bubble-container');
-            container.innerHTML = '';
-            for(let i=0; i<20; i++) {
-                const b = document.createElement('div');
-                b.className = 'bubble';
-                b.style.left = Math.random() * 100 + '%';
-                b.style.width = b.style.height = (Math.random() * 8 + 2) + 'px';
-                b.style.animationDelay = Math.random() * 1 + 's';
-                container.appendChild(b);
-            }
-        }
-
-        function updateInstruction(text) {
-            document.getElementById('instruction-text').innerText = text;
-        }
-
-        function resetLab() {
-            state = { sample: null, reagent: null, isHeating: false, heatTime: 0, isHydrolyzed: false, logs: state.logs };
-            document.getElementById('layer-sample').style.height = '0';
-            document.getElementById('layer-reagent').style.height = '0';
-            document.getElementById('layer-reaction').style.height = '0';
-            document.getElementById('molisch-ring').style.opacity = '0';
-            document.getElementById('tube-label').style.opacity = '0';
-            document.getElementById('result-panel').style.opacity = '0';
-            document.getElementById('result-panel').style.transform = 'translateY(100%)';
-            stopHeat();
-        }
-
-        function addToLog(msg, type) {
-            const log = document.getElementById('lab-log');
-            const entry = document.createElement('div');
-            let color = 'text-slate-400';
-            if(type === 'pos') color = 'text-emerald-400';
-            if(type === 'neg') color = 'text-red-400';
-            if(type === 'warn') color = 'text-blue-400';
-            
-            entry.className = `p-3 rounded-xl bg-white/5 border-r-2 border-slate-700 ${color}`;
-            entry.innerHTML = `
-                <div class="flex justify-between mb-1 opacity-50 text-[8px]">
-                    <span>${new Date().toLocaleTimeString('ar-EG')}</span>
-                    <span>#${log.children.length + 1}</span>
+                  {/* Rack Support */}
+                  <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-56 h-10 bg-gradient-to-b from-[#1a1c22] to-[#0a0b0d] rounded-2xl border border-white/10 shadow-2xl flex items-center justify-center">
+                     <div className="w-32 h-2 bg-black/40 rounded-full border-t border-white/5"></div>
+                  </div>
+                  
+                  {/* Micro-Interaction Button */}
+                  <button 
+                    onMouseEnter={() => setIsMagnifying(true)}
+                    onMouseLeave={() => setIsMagnifying(false)}
+                    className="absolute -right-24 bottom-32 w-14 h-14 flex items-center justify-center bg-[#0f1115] border border-white/10 rounded-full text-slate-400 hover:text-white hover:bg-blue-600 hover:scale-110 transition-all shadow-xl z-30"
+                  >
+                    <Search size={22}/>
+                  </button>
                 </div>
-                ${msg}
-            `;
-            log.prepend(entry);
-            document.getElementById('log-count').innerText = `${log.children.length}/20`;
+
+                {/* Microscope View (Scientific Detail) */}
+                {isMagnifying && (
+                  <div className="absolute top-1/2 left-[110%] -translate-y-1/2 w-64 h-64 rounded-full border-[8px] border-[#1a1c22] shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden bg-[#050507] z-50 animate-in zoom-in-50 duration-300">
+                    <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.1),transparent)]">
+                      <div className="w-full h-full border border-dashed border-white/5 rounded-full absolute pointer-events-none"></div>
+                      <div className="text-[10px] font-black text-blue-500 mb-2 tracking-[0.2em] uppercase">Micro-Analysis</div>
+                      <div className="h-[1px] w-12 bg-blue-500/40 mb-4"></div>
+                      <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
+                        {precipitate > 10 
+                          ? `رصد تبلور جزيئات ${tubeContent.sample?.id === 'sta' ? 'الأميلوز' : 'النحاسوز'} في الوسط المائي نتيجة التفاعل الكيميائي.` 
+                          : "لا توجد ترسبات صلبة مكتشفة. المحلول في حالة اتزان أيوني حالياً."}
+                      </p>
+                      <div className="mt-4 flex gap-1">
+                        {[1,2,3,4].map(i => <div key={i} className="w-1 h-1 rounded-full bg-blue-500/20"></div>)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right: Smart Lab Assistant & Reports */}
+              <div className="col-span-3 flex flex-col gap-6 py-4">
+                <div className="bg-[#0a0b0e] border border-white/5 rounded-[32px] p-6 flex-1 flex flex-col shadow-inner relative overflow-hidden">
+                  <div className="flex items-center justify-between mb-6 relative z-10">
+                    <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+                      <ClipboardCheck size={14}/> تقرير التجربة
+                    </h4>
+                    <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pr-2 relative z-10">
+                    {logs.map(l => (
+                      <div key={l.id} className="group p-4 bg-white/[0.02] border-r-4 border-blue-600 rounded-xl transition-all hover:bg-white/[0.05]">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[9px] text-slate-600 font-mono">{l.time}</span>
+                          <Zap size={10} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"/>
+                        </div>
+                        <p className="text-[11px] font-bold text-slate-300 leading-relaxed">{l.msg}</p>
+                      </div>
+                    ))}
+                    {logs.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center opacity-20 py-20 text-center">
+                        <Activity size={48} className="mb-4 text-slate-700"/>
+                        <p className="text-[10px] font-black uppercase tracking-widest">جاهز لاستقبال البيانات</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-blue-900/20 to-transparent border border-blue-500/20 rounded-[32px] p-6">
+                   <div className="flex items-center gap-3 text-blue-400 mb-4">
+                      <div className="p-2 bg-blue-500/10 rounded-lg"><Target size={16}/></div>
+                      <span className="text-[11px] font-black uppercase tracking-widest">التوجيه الأكاديمي</span>
+                   </div>
+                   <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5"></div>
+                        <p className="text-[11px] text-blue-200/70 font-medium leading-relaxed">
+                          {!tubeContent.sample ? "ابدأ باختيار عينة كربوهيدرات من القائمة لتعريضها للتحليل." : 
+                           tubeContent.reagents.length === 0 ? "ممتاز، الآن قم بإضافة كاشف كيميائي مناسب (بندكت، يود، أو بيال)." :
+                           !isHeating ? "التفاعل يحتاج إلى طاقة تنشيط؛ قم بتشغيل موقد بنسن بحذر." : 
+                           "راقب التغير اللوني في الأنبوب والتقرير الجانبي لتسجيل النتائج."}
+                        </p>
+                      </div>
+                   </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* Balance View (High Precision) */}
+          {activeTab === 'balance' && (
+            <div className="flex flex-col items-center justify-center w-full h-full animate-in fade-in zoom-in-95 duration-700">
+               <div className="relative">
+                  <div className="w-[600px] h-[450px] bg-[#0f1115] p-16 rounded-[80px] border border-white/10 shadow-[0_0_150px_rgba(0,0,0,0.6)] relative overflow-hidden">
+                    <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-blue-500/50 to-transparent"></div>
+                    
+                    <div className="h-48 bg-black/90 rounded-[40px] border border-emerald-500/20 flex flex-col items-center justify-center shadow-[inner_0_4px_20px_rgba(0,0,0,0.8)]">
+                       <div className="text-[10px] font-mono text-emerald-900 absolute top-20">ANALYTICAL BALANCE | MAX 220g</div>
+                       <div className="text-[100px] font-mono text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)] tracking-tighter flex items-baseline">
+                         {weight.toFixed(3)}
+                         <span className="text-3xl text-emerald-800 ml-4 font-sans">g</span>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-8 mt-16">
+                       <button onClick={() => setWeight(0)} className="py-6 bg-slate-800/40 hover:bg-slate-800/60 border border-white/5 rounded-3xl text-[11px] font-black uppercase tracking-[0.2em] transition-all hover:scale-[1.02]">
+                         إعادة تصفير (Tare)
+                       </button>
+                       <button onClick={() => setWeight(prev => prev + (Math.random() * 1.5))} className="py-6 bg-blue-600 hover:bg-blue-500 rounded-3xl text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-[0_10px_30px_rgba(37,99,235,0.3)] hover:scale-[1.02]">
+                         إضافة مادة تحليلية
+                       </button>
+                    </div>
+                  </div>
+               </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Global CSS for Animations */}
+      <style jsx>{`
+        @keyframes steam {
+          0% { transform: translateY(0) scale(1); opacity: 0; }
+          30% { opacity: 0.5; }
+          100% { transform: translateY(-150px) scale(3); opacity: 0; }
         }
+        @keyframes bubble {
+          0% { transform: translateY(0); opacity: 0; }
+          50% { opacity: 0.8; }
+          100% { transform: translateY(-300px); opacity: 0; }
+        }
+        .animate-steam { animation: steam 2.5s infinite ease-out; }
+        .animate-bubble { animation: bubble 1.5s infinite ease-in; }
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
+        .perspective-1000 { perspective: 1200px; }
+      `}</style>
 
-        initInventory();
-    </script>
-</body>
-</html>
+    </div>
+  );
+}
 
+
+        
